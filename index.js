@@ -10,7 +10,7 @@ const {
 const sqlite3 = require("sqlite3").verbose();
 const express = require("express");
 
-const TOKEN = "MTQ5OTcyNDk2NjM2MTMwNTE2MA.Gk2mOU.Rppsegp8T5qwr1FjNEE1bSX8lJbT3AeFmOd-5I";
+const TOKEN = "MTQ5OTcyNDk2NjM2MTMwNTE2MA.GNy9u7.dz1cXpfaIc3xPwi9rB8MpuupSdcYoTJ51DoyhI";
 const IS_RENDER = process.env.RENDER === "true";
 const DB_PATH = process.env.DB_PATH || (IS_RENDER ? "/tmp/data.db" : "./data.db");
 const PORT = Number(process.env.PORT) || 10000;
