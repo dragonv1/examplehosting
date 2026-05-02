@@ -1065,5 +1065,16 @@ client.on("interactionCreate", async (interaction) => {
   }
 });
 
-client.login(TOKEN);
+client.on("ready", () => {
+  console.log(`⚽ FULL NEON SYSTEM ACTIVE: ${client.user.tag}`);
+});
+
+client.on("error", (err) => console.error("Discord client error:", err));
+client.on("shardError", (err) => console.error("Discord shard error:", err));
+process.on("unhandledRejection", (err) => console.error("Unhandled rejection:", err));
+
+client.login(TOKEN).catch((err) => {
+  console.error("Login failed:", err);
+});
+
 
