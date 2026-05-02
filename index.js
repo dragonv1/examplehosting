@@ -1067,4 +1067,10 @@ client.on("interactionCreate", async (interaction) => {
   }
 });
 
-client.login(TOKEN);
+client.login(TOKEN)
+  .then(() => console.log("Discord login OK"))
+  .catch((err) => {
+    console.error("Discord login FAILED:", err);
+    process.exit(1);
+  });
+
