@@ -10,7 +10,7 @@ const {
 const sqlite3 = require("sqlite3").verbose();
 const express = require("express");
 
-const TOKEN = "MTQ5OTcyNDk2NjM2MTMwNTE2MA.GNy9u7.dz1cXpfaIc3xPwi9rB8MpuupSdcYoTJ51DoyhI";
+const TOKEN = "MTQ5OTcyNDk2NjM2MTMwNTE2MA.G1D0OD.hbd5OxOnVCqA9l1dO5BcTGtl7dBwFCGtE1A7RQ";
 const IS_RENDER = process.env.RENDER === "true";
 const DB_PATH = process.env.DB_PATH || (IS_RENDER ? "/tmp/data.db" : "./data.db");
 const PORT = Number(process.env.PORT) || 10000;
@@ -27,55 +27,53 @@ const client = new Client({
 /* ================= DATABASE ================= */
 const db = new sqlite3.Database(DB_PATH);
 
-db.serialize(() => {
-  db.run(`
-  CREATE TABLE IF NOT EXISTS history (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    userId TEXT,
-    oldValue INTEGER,
-    newValue INTEGER,
-    amount INTEGER,
-    action TEXT,
-    reason TEXT,
-    staffId TEXT,
-    time DATETIME DEFAULT CURRENT_TIMESTAMP
-  )
-  `);
+db.run(`
+CREATE TABLE IF NOT EXISTS history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  userId TEXT,
+  oldValue INTEGER,
+  newValue INTEGER,
+  amount INTEGER,
+  action TEXT,
+  reason TEXT,
+  staffId TEXT,
+  time DATETIME DEFAULT CURRENT_TIMESTAMP
+)
+`);
 
-  db.run(`
-  CREATE TABLE IF NOT EXISTS money (
-    userId TEXT PRIMARY KEY,
-    balance INTEGER DEFAULT 0
-  )
-  `);
+db.run(`
+CREATE TABLE IF NOT EXISTS money (
+  userId TEXT PRIMARY KEY,
+  balance INTEGER DEFAULT 0
+)
+`);
 
-  db.run(`
-  CREATE TABLE IF NOT EXISTS career_stats (
-    userId TEXT PRIMARY KEY,
-    goals INTEGER DEFAULT 0,
-    assists INTEGER DEFAULT 0,
-    matches INTEGER DEFAULT 0
-  )
-  `);
+db.run(`
+CREATE TABLE IF NOT EXISTS career_stats (
+  userId TEXT PRIMARY KEY,
+  goals INTEGER DEFAULT 0,
+  assists INTEGER DEFAULT 0
+)
+`);
 
-  db.run(`ALTER TABLE career_stats ADD COLUMN matches INTEGER DEFAULT 0`, (err) => {
-    if (err && !String(err.message).toLowerCase().includes("duplicate column")) {
-      console.error("career_stats matches kolonu eklenemedi:", err.message);
-    }
-  });
-
-  db.run(`
-  CREATE TABLE IF NOT EXISTS career_moves (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    userId TEXT,
-    fromTeam TEXT,
-    toTeam TEXT,
-    staffId TEXT,
-    time DATETIME DEFAULT CURRENT_TIMESTAMP
-  )
-  `);
+db.all(`PRAGMA table_info(career_stats)`, (err, rows) => {
+  if (err || !rows) return;
+  const hasMatches = rows.some((r) => r.name === "matches");
+  if (!hasMatches) {
+    db.run(`ALTER TABLE career_stats ADD COLUMN matches INTEGER DEFAULT 0`);
+  }
 });
 
+db.run(`
+CREATE TABLE IF NOT EXISTS career_moves (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  userId TEXT,
+  fromTeam TEXT,
+  toTeam TEXT,
+  staffId TEXT,
+  time DATETIME DEFAULT CURRENT_TIMESTAMP
+)
+`);
 
 /* ================= SYSTEM ================= */
 const offers = new Map();
@@ -1067,27 +1065,5 @@ client.on("interactionCreate", async (interaction) => {
   }
 });
 
-console.log("BOT STARTING...");
-console.log("TOKEN LEN:", TOKEN ? TOKEN.length : 0);
-
-client.on("ready", () => {
-  console.log("FULL NEON SYSTEM ACTIVE:", client.user.tag);
-});
-client.on("error", (e) => console.error("CLIENT ERROR:", e));
-client.on("warn", (w) => console.warn("CLIENT WARN:", w));
-client.on("shardError", (e) => console.error("SHARD ERROR:", e));
-process.on("unhandledRejection", (e) => console.error("UNHANDLED:", e));
-process.on("uncaughtException", (e) => console.error("UNCAUGHT:", e));
-
-client.login(TOKEN)
-  .then(() => console.log("Discord login OK"))
-  .catch((err) => {
-    console.error("Discord login FAILED:", err);
-    process.exit(1);
-  });
-
-setTimeout(() => {
-  console.log("READY AFTER 30s:", client.isReady());
-}, 30000);
-
+client.login(TOKEN);
 
