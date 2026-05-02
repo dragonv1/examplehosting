@@ -27,53 +27,39 @@ const client = new Client({
 /* ================= DATABASE ================= */
 const db = new sqlite3.Database(DB_PATH);
 
-db.run(`
-CREATE TABLE IF NOT EXISTS history (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  userId TEXT,
-  oldValue INTEGER,
-  newValue INTEGER,
-  amount INTEGER,
-  action TEXT,
-  reason TEXT,
-  staffId TEXT,
-  time DATETIME DEFAULT CURRENT_TIMESTAMP
-)
-`);
+db.serialize(() => {
 
-db.run(`
-CREATE TABLE IF NOT EXISTS money (
-  userId TEXT PRIMARY KEY,
-  balance INTEGER DEFAULT 0
-)
-`);
+  db.run(`
+  CREATE TABLE IF NOT EXISTS history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    userId TEXT,
+    oldValue INTEGER,
+    newValue INTEGER,
+    amount INTEGER,
+    action TEXT,
+    reason TEXT,
+    staffId TEXT,
+    time DATETIME DEFAULT CURRENT_TIMESTAMP
+  )
+  `);
 
-db.run(`
-CREATE TABLE IF NOT EXISTS career_stats (
-  userId TEXT PRIMARY KEY,
-  goals INTEGER DEFAULT 0,
-  assists INTEGER DEFAULT 0
-)
-`);
+  db.run(`
+  CREATE TABLE IF NOT EXISTS money (
+    userId TEXT PRIMARY KEY,
+    balance INTEGER DEFAULT 0
+  )
+  `);
 
-db.all(`PRAGMA table_info(career_stats)`, (err, rows) => {
-  if (err || !rows) return;
-  const hasMatches = rows.some((r) => r.name === "matches");
-  if (!hasMatches) {
-    db.run(`ALTER TABLE career_stats ADD COLUMN matches INTEGER DEFAULT 0`);
-  }
+  db.run(`
+  CREATE TABLE IF NOT EXISTS career_stats (
+    userId TEXT PRIMARY KEY,
+    goals INTEGER DEFAULT 0,
+    assists INTEGER DEFAULT 0,
+    matches INTEGER DEFAULT 0
+  )
+  `);
+
 });
-
-db.run(`
-CREATE TABLE IF NOT EXISTS career_moves (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  userId TEXT,
-  fromTeam TEXT,
-  toTeam TEXT,
-  staffId TEXT,
-  time DATETIME DEFAULT CURRENT_TIMESTAMP
-)
-`);
 
 /* ================= SYSTEM ================= */
 const offers = new Map();
@@ -580,13 +566,6 @@ client.on("messageCreate", async (message) => {
 });
 
 /* ================= PARA ================= */
-db.run(`
-CREATE TABLE IF NOT EXISTS money (
-  userId TEXT PRIMARY KEY,
-  balance INTEGER DEFAULT 0
-)
-`);
-
 function getBalance(userId, callback) {
   db.get(`SELECT balance FROM money WHERE userId = ?`, [userId], (err, row) => {
     if (err) return callback(0);
