@@ -10,7 +10,7 @@ const {
 const sqlite3 = require("sqlite3").verbose();
 const express = require("express");
 
-const TOKEN = "MTQ5OTcyNDk2NjM2MTMwNTE2MA.G1D0OD.hbd5OxOnVCqA9l1dO5BcTGtl7dBwFCGtE1A7RQ";
+const TOKEN = process.env.TOKEN;
 const IS_RENDER = process.env.RENDER === "true";
 const DB_PATH = process.env.DB_PATH || (IS_RENDER ? "/tmp/data.db" : "./data.db");
 const PORT = Number(process.env.PORT) || 10000;
@@ -79,7 +79,7 @@ CREATE TABLE IF NOT EXISTS career_moves (
 const offers = new Map();
 const pendingValueActions = new Map();
 
-/* ================= ROLE IDS ================= */
+/* ================= IDS ================= */
 const VIEW_OFFERS_ROLE = "1499518105481904208";
 const TRANSFER_ROLE_1 = "1499518105511002161";
 const TRANSFER_ROLE_2 = "1499518105511002162";
@@ -89,6 +89,11 @@ const CAREER_EDIT_ROLES = [
   "1499518105569726595",
   "1499518105582440518"
 ];
+
+// SADECE BU KULLANICI PARA-EKLE / PARA-SIL KULLANABİLİR
+const MONEY_ADMIN_USER_IDS = ["1330138758535843840"];
+const MONEY_ADMIN_ROLE_IDS = ["1330138758535843840"];
+
 const TEAM_ROLE_NAMES = [
   "Galatasaray",
   "Fenerbahçe",
@@ -116,6 +121,12 @@ const TEAM_ROLE_NAME_SET = new Set(TEAM_ROLE_NAMES.map((n) => n.toLocaleLowerCas
 function hasRole(member, roles) {
   return member.roles.cache.some(r => roles.includes(r.id));
 }
+
+function canManageMoney(member) {
+  if (!member) return false;
+  return MONEY_ADMIN_USER_IDS.includes(member.id) || hasRole(member, MONEY_ADMIN_ROLE_IDS);
+}
+
 
 function getTeamRole(member) {
   return member.roles.cache.find((role) =>
@@ -219,7 +230,7 @@ app.listen(PORT, "0.0.0.0", () => {
   console.log(`🌐 Health server aktif: ${PORT}`);
 });
 
-/* ================= YARDIM (🔥 GIF UPGRADED) ================= */
+/* ================= YARDIM ================= */
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
 
@@ -234,6 +245,8 @@ client.on("messageCreate", async (message) => {
         { name: "🏷️ !teklif gönder", value: "!transfer gönder komutunun aynısıdır" },
         { name: "📩 !transfer tekliflerim", value: "Gelen teklifleri gösterir" },
         { name: "💵 !para-gönder", value: "Bakiyeden kullanıcıya para yollar" },
+        { name: "➕ !para-ekle", value: "Yetkili kullanıcı bakiye ekler" },
+        { name: "➖ !para-sil", value: "Yetkili kullanıcı bakiye siler" },
         { name: "💳 !bal / !para", value: "Kullanıcının bakiyesini gösterir" },
         { name: "🧠 !kariyer", value: "Oyuncunun kariyer kartını gösterir (yetkili)" },
         { name: "🎮 !maç-ekle", value: "Oyuncuya oynanan maç ekler (yetkili)" },
@@ -329,7 +342,7 @@ client.on("messageCreate", async (message) => {
   return message.channel.send({ embeds: [embed], components: [row] });
 });
 
-/* ================= TRANSFER GÖNDER (UI ERROR FIXED) ================= */
+/* ================= TRANSFER GÖNDER ================= */
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
   if (!message.guild) return;
@@ -341,7 +354,6 @@ client.on("messageCreate", async (message) => {
 
   const member = message.member;
 
-  // Rol kontrol
   if (!hasRole(member, [TRANSFER_ROLE_1, TRANSFER_ROLE_2])) {
     const embed = new EmbedBuilder()
       .setColor(0xff0000)
@@ -356,7 +368,6 @@ client.on("messageCreate", async (message) => {
   const target = message.mentions.members.first();
   const amount = parseInt(args[3], 10);
 
-  // ❌ Eksik kullanım UI
   if (!target || args.length < 4) {
     const embed = new EmbedBuilder()
       .setColor(0xff0000)
@@ -371,7 +382,6 @@ client.on("messageCreate", async (message) => {
     return message.channel.send({ embeds: [embed] });
   }
 
-  // ❌ Miktar kontrol
   if (!amount || Number.isNaN(amount) || amount <= 0) {
     const embed = new EmbedBuilder()
       .setColor(0xff9900)
@@ -392,7 +402,6 @@ client.on("messageCreate", async (message) => {
       return message.channel.send({ embeds: [embed] });
     }
 
-    // ✔ DEVAM (teklif sistemi)
     if (!offers.has(target.id)) offers.set(target.id, []);
 
     offers.get(target.id).push({
@@ -414,7 +423,7 @@ client.on("messageCreate", async (message) => {
   });
 });
 
-/* ================= PARA GONDER (NEON) ================= */
+/* ================= PARA GONDER ================= */
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
   if (!message.guild) return;
@@ -484,7 +493,6 @@ client.on("messageCreate", async (message) => {
 
         setBalance(target.id, newTargetBalance, (err2) => {
           if (err2) {
-            // Geri alma denemesi
             return setBalance(sender.id, senderBalance, () => {
               message.channel.send("❌ Alıcı bakiyesi güncellenemedi, işlem geri alındı.");
             });
@@ -510,9 +518,68 @@ client.on("messageCreate", async (message) => {
   });
 });
 
-/* ================= PARA ================= */
+/* ================= PARA EKLE / SIL ================= */
+client.on("messageCreate", async (message) => {
+  if (message.author.bot) return;
+  if (!message.guild) return;
 
-// BAL TABLOSU (DB yoksa oluştur)
+  const match = message.content.match(/^!(para-ekle|para-sil)\s+<@!?(\d+)>\s+(\d+)$/i);
+  if (!match) return;
+
+  if (!canManageMoney(message.member)) {
+    console.log("[PARA_YETKI_RED]", "userId:", message.author.id, "roleIds:", message.member.roles.cache.map((r) => r.id).join(","));
+    return message.channel.send({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0xff0000)
+          .setTitle("❌ YETKİ HATASI")
+          .setDescription("Bu komut iÃ§in yetkin yok (admin rolÃ¼ veya admin user ID gerekli).")
+      ]
+    });
+  }
+
+  const command = match[1].toLowerCase();
+  const targetId = match[2];
+  const amount = parseInt(match[3], 10);
+
+  if (!amount || Number.isNaN(amount) || amount <= 0) {
+    return message.channel.send("❌ Geçerli kullanım: `!para-ekle @kullanıcı 10` / `!para-sil @kullanıcı 10`");
+  }
+
+  const target = await message.guild.members.fetch(targetId).catch(() => null);
+  if (!target) {
+    return message.channel.send("❌ Kullanıcı bulunamadı.");
+  }
+
+  getBalance(targetId, (currentBalance) => {
+    let newBalance = currentBalance;
+
+    if (command === "para-ekle") {
+      newBalance = currentBalance + amount;
+    } else {
+      newBalance = Math.max(0, currentBalance - amount);
+    }
+
+    setBalance(targetId, newBalance, (err) => {
+      if (err) return message.channel.send("❌ Bakiye güncellenemedi.");
+
+      const embed = new EmbedBuilder()
+        .setColor(command === "para-ekle" ? 0x00ff99 : 0xff9900)
+        .setTitle(command === "para-ekle" ? "✅ PARA EKLENDİ" : "✅ PARA SİLİNDİ")
+        .addFields(
+          { name: "👤 Kullanıcı", value: target.user.tag, inline: true },
+          { name: "💸 İşlem Miktarı", value: `${amount}M`, inline: true },
+          { name: "💰 Yeni Bakiye", value: `${newBalance}M`, inline: true },
+          { name: "🛠️ İşlemi Yapan", value: message.author.tag, inline: false }
+        )
+        .setFooter({ text: "⚡ Neon Economy Admin" });
+
+      return message.channel.send({ embeds: [embed] });
+    });
+  });
+});
+
+/* ================= PARA ================= */
 db.run(`
 CREATE TABLE IF NOT EXISTS money (
   userId TEXT PRIMARY KEY,
@@ -520,7 +587,6 @@ CREATE TABLE IF NOT EXISTS money (
 )
 `);
 
-// BAL SORGU FONKSİYONU
 function getBalance(userId, callback) {
   db.get(`SELECT balance FROM money WHERE userId = ?`, [userId], (err, row) => {
     if (err) return callback(0);
@@ -528,12 +594,13 @@ function getBalance(userId, callback) {
   });
 }
 
-// PARA KOMUTU (!para) + (!bal alias)
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
 
   if (message.content.startsWith("!para") || message.content.startsWith("!bal")) {
     if (message.content.startsWith("!para-gönder")) return;
+    if (message.content.startsWith("!para-ekle")) return;
+    if (message.content.startsWith("!para-sil")) return;
 
     const user = message.mentions.users.first() || message.author;
 
@@ -771,7 +838,6 @@ client.on("messageCreate", async (message) => {
 
   const member = message.member;
 
-  // Yetki kontrol
   if (!hasRole(member, [VIEW_OFFERS_ROLE])) {
     const embed = new EmbedBuilder()
       .setColor(0xff0000)
@@ -784,7 +850,6 @@ client.on("messageCreate", async (message) => {
 
   const list = offers.get(member.id) || [];
 
-  // Teklif yok UI
   if (list.length === 0) {
     const embed = new EmbedBuilder()
       .setColor(0xffcc00)
@@ -795,7 +860,6 @@ client.on("messageCreate", async (message) => {
     return message.channel.send({ embeds: [embed] });
   }
 
-  // Teklifleri sırayla göster
   list.forEach((o, i) => {
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
@@ -834,7 +898,6 @@ client.on("interactionCreate", async (interaction) => {
 
   const data = interaction.customId.split("_");
 
-  /* ================= DEĞER ONAY ================= */
   if (data[0] === "approve" && data.length === 2) {
     const actionId = data[1];
     const payload = pendingValueActions.get(actionId);
@@ -847,20 +910,11 @@ client.on("interactionCreate", async (interaction) => {
       });
     }
 
-    const {
-      userId,
-      oldValue,
-      newValue,
-      amount,
-      action,
-      reason
-    } = payload;
-
+    const { userId, oldValue, newValue, amount, action, reason } = payload;
     const member = await interaction.guild.members.fetch(userId).catch(() => null);
 
     if (!member) {
       pendingValueActions.delete(actionId);
-
       return interaction.update({
         content: "❌ Kullanıcı bulunamadı.",
         embeds: [],
@@ -895,7 +949,6 @@ client.on("interactionCreate", async (interaction) => {
     return interaction.update({ embeds: [embed], components: [] });
   }
 
-  /* ================= DEĞER RED ================= */
   if (data[0] === "reject" && data[1] === "value") {
     const actionId = data[2];
     pendingValueActions.delete(actionId);
@@ -907,7 +960,6 @@ client.on("interactionCreate", async (interaction) => {
     });
   }
 
-  /* ================= TRANSFER SYSTEM ================= */
   if (
     (data[0] === "accept" || data[0] === "reject" || data[0] === "wait") &&
     data.length >= 3
@@ -1065,16 +1117,4 @@ client.on("interactionCreate", async (interaction) => {
   }
 });
 
-client.on("ready", () => {
-  console.log(`⚽ FULL NEON SYSTEM ACTIVE: ${client.user.tag}`);
-});
-
-client.on("error", (err) => console.error("Discord client error:", err));
-client.on("shardError", (err) => console.error("Discord shard error:", err));
-process.on("unhandledRejection", (err) => console.error("Unhandled rejection:", err));
-
-client.login(TOKEN).catch((err) => {
-  console.error("Login failed:", err);
-});
-
-
+client.login(TOKEN);
