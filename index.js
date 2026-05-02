@@ -1067,10 +1067,27 @@ client.on("interactionCreate", async (interaction) => {
   }
 });
 
+console.log("BOT STARTING...");
+console.log("TOKEN LEN:", TOKEN ? TOKEN.length : 0);
+
+client.on("ready", () => {
+  console.log("FULL NEON SYSTEM ACTIVE:", client.user.tag);
+});
+client.on("error", (e) => console.error("CLIENT ERROR:", e));
+client.on("warn", (w) => console.warn("CLIENT WARN:", w));
+client.on("shardError", (e) => console.error("SHARD ERROR:", e));
+process.on("unhandledRejection", (e) => console.error("UNHANDLED:", e));
+process.on("uncaughtException", (e) => console.error("UNCAUGHT:", e));
+
 client.login(TOKEN)
   .then(() => console.log("Discord login OK"))
   .catch((err) => {
     console.error("Discord login FAILED:", err);
     process.exit(1);
   });
+
+setTimeout(() => {
+  console.log("READY AFTER 30s:", client.isReady());
+}, 30000);
+
 
